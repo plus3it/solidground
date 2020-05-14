@@ -24,7 +24,7 @@ Variable | Default | Req/Opt (in CodeBuild) | Description
 `TF_VAR_tfi_win_args` | --log-dir=C:\\Watchmaker\\Logs | optional | Command line arguments used when installing Watchmaker on Windows.
 `TF_VAR_tfi_lx_args` | --log-dir=/var/log/watchmaker | optional | Command line arguments used when installing Watchmaker on Linux.
 `TF_VAR_tfi_win_userdata_log` | C:\\Temp\\userdata.log | optional | File path for Watchmaker log on Windows.
-`TF_VAR_tfi_lx_userdata_log` | mybucket | optional | File path for Watchmaker log on Linux.
+`TF_VAR_tfi_lx_userdata_log` | /var/log/userdata.log | optional | File path for Watchmaker log on Linux.
 `TF_VAR_tfi_s3_bucket` | mybucket | optional | S3 bucket to place logs from installs and output.
 `TF_VAR_tfi_codebuild_id` | none | optional | CodeBuild build ID (helpful in identifying jobs).
 `TF_VAR_tfi_docker_slug` | none | optional | Docker container to use in building standalones.
