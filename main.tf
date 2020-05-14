@@ -30,7 +30,7 @@ locals {
 
 # build settings
 locals {
-  name_prefix   = "solidearth"
+  name_prefix   = "solidground"
   date_ymd      = "${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 0, 4)}${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 5, 2)}${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 8, 2)}" #equivalent of $(date +'%Y%m%d')
   date_hm       = "${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 11, 2)}${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 14, 2)}"                                                                     #equivalent of $(date +'%H%M')
   full_build_id = var.tfi_codebuild_id == "" ? format("notcb:%s", uuid()) : var.tfi_codebuild_id                                                                                                                                       #128-bit rfc 4122 v4 UUID
@@ -177,7 +177,7 @@ resource "aws_default_subnet" "tfi" {
 resource "aws_security_group" "winrm_sg" {
   count       = local.win_any_request
   name        = "${local.resource_name}-winrm"
-  description = "Used in solidearth"
+  description = "Used in solidground"
   vpc_id      = data.aws_subnet.tfi.vpc_id
 
   tags = {
@@ -202,7 +202,7 @@ resource "aws_security_group" "winrm_sg" {
 resource "aws_security_group" "ssh_sg" {
   count       = local.lx_any_request # only create if any lx instances
   name        = "${local.resource_name}-ssh"
-  description = "Used in solidearth"
+  description = "Used in solidground"
   vpc_id      = data.aws_subnet.tfi.vpc_id
 
   tags = {
