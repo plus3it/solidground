@@ -458,7 +458,7 @@ resource "aws_instance" "win_sa" {
   }
 }
 
-resource "aws_instance" "lx_builder" {  
+resource "aws_instance" "lx_builder" {
   for_each = toset(local.lx_builder_request)
   ami      = data.aws_ami.lx_amis[each.key].id
 
