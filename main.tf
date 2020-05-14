@@ -100,12 +100,16 @@ locals {
   win_builder_request = length(local.win_sa_requests) > 0 ? ["win12"] : []
   win_all_requests    = toset(concat(local.win_src_requests, local.win_sa_requests, local.win_builder_request))
   win_any_request     = length(local.win_all_requests) > 0 ? 1 : 0
+  win_src_expanded    = var.tfi_instance_multiplier > 1 ? [for i in setproduct(local.win_src_requests, range(1, var.tfi_instance_multiplier + 1)) : format("%s-%02d", i[0], i[1])] : local.win_src_requests
+  win_sa_expanded     = var.tfi_instance_multiplier > 1 ? [for i in setproduct(local.win_sa_requests, range(1, var.tfi_instance_multiplier + 1)) : format("%s-%02d", i[0], i[1])] : local.win_sa_requests
 
   lx_src_requests    = [for k, v in local.lx_ami_find : k if contains(local.user_requests, format("%ssrc", k))]
   lx_sa_requests     = [for k, v in local.lx_ami_find : k if contains(local.user_requests, format("%ssa", k))]
   lx_builder_request = length(local.lx_sa_requests) > 0 ? ["xenial"] : []
   lx_all_requests    = toset(concat(local.lx_src_requests, local.lx_sa_requests, local.lx_builder_request))
   lx_any_request     = length(local.lx_all_requests) > 0 ? 1 : 0
+  lx_src_expanded    = var.tfi_instance_multiplier > 1 ? [for i in setproduct(local.lx_src_requests, range(1, var.tfi_instance_multiplier + 1)) : format("%s-%02d", i[0], i[1])] : local.lx_src_requests
+  lx_sa_expanded     = var.tfi_instance_multiplier > 1 ? [for i in setproduct(local.lx_sa_requests, range(1, var.tfi_instance_multiplier + 1)) : format("%s-%02d", i[0], i[1])] : local.lx_sa_requests
 }
 
 data "aws_ami" "win_amis" {
@@ -301,8 +305,8 @@ resource "aws_instance" "win_builder" {
 }
 
 resource "aws_instance" "win_src" {
-  for_each = toset(local.win_src_requests)
-  ami      = data.aws_ami.win_amis[each.key].id
+  for_each = toset(local.win_src_expanded)
+  ami      = data.aws_ami.win_amis[regex("[a-z0-9]+", each.key)].id
 
   associate_public_ip_address = var.tfi_assign_public_ip
   iam_instance_profile        = var.tfi_instance_profile
@@ -378,8 +382,8 @@ resource "aws_instance" "win_src" {
 }
 
 resource "aws_instance" "win_sa" {
-  for_each = toset(local.win_sa_requests)
-  ami      = data.aws_ami.win_amis[each.key].id
+  for_each = toset(local.win_sa_expanded)
+  ami      = data.aws_ami.win_amis[regex("[a-z0-9]+", each.key)].id
 
   associate_public_ip_address = var.tfi_assign_public_ip
   iam_instance_profile        = var.tfi_instance_profile
@@ -454,7 +458,7 @@ resource "aws_instance" "win_sa" {
   }
 }
 
-resource "aws_instance" "lx_builder" {
+resource "aws_instance" "lx_builder" {  
   for_each = toset(local.lx_builder_request)
   ami      = data.aws_ami.lx_amis[each.key].id
 
@@ -529,8 +533,8 @@ resource "aws_instance" "lx_builder" {
 }
 
 resource "aws_instance" "lx_src" {
-  for_each = toset(local.lx_src_requests)
-  ami      = data.aws_ami.lx_amis[each.key].id
+  for_each = toset(local.lx_src_expanded)
+  ami      = data.aws_ami.lx_amis[regex("[a-z0-9]+", each.key)].id
 
   associate_public_ip_address = var.tfi_assign_public_ip
   iam_instance_profile        = var.tfi_instance_profile
@@ -603,8 +607,8 @@ resource "aws_instance" "lx_src" {
 }
 
 resource "aws_instance" "lx_sa" {
-  for_each = toset(local.lx_sa_requests)
-  ami      = data.aws_ami.lx_amis[each.key].id
+  for_each = toset(local.lx_sa_expanded)
+  ami      = data.aws_ami.lx_amis[regex("[a-z0-9]+", each.key)].id
 
   associate_public_ip_address = var.tfi_assign_public_ip
   iam_instance_profile        = var.tfi_instance_profile

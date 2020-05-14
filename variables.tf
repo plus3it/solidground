@@ -82,3 +82,7 @@ variable "tfi_aws_region" {
 variable "tfi_debug" {
   default = "1"
 }
+
+variable "tfi_instance_multiplier" {
+  default = "1"
+}

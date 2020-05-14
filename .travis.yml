@@ -1,0 +1,20 @@
+language: bash
+sudo: false
+
+before_install:
+  - echo 'before_install'
+
+install:
+  - echo 'install'
+
+jobs:
+  include:
+    - stage: test
+      env:
+        - JOB="Terraform Format Verification"
+      before_script:
+        - git clone https://github.com/plus3it/terraform-bootstrap.git
+        - cd terraform-bootstrap && ./install.sh
+        - terraform -v
+      script:
+        - terraform fmt -check=true

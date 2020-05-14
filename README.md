@@ -24,6 +24,7 @@ Variable | Default | Req/Opt (in CodeBuild) | Description
 `TF_VAR_tfi_lx_args` | --log-dir=/var/log/watchmaker | optional | Command line arguments used when installing Watchmaker (Linux).
 `TF_VAR_tfi_s3_bucket` | mybucket | optional | Which S3 bucket to place logs from installs and output from Terraform.
 `TF_VAR_tfi_docker_slug` | none | optional | Which Docker container to use in building standalones.
+`TF_VAR_tfi_instance_multiplier` | none | optional | How many of each instance type to create (Default: 1)
 `TF_DESTROY_AFTER_TEST` | true | optional | Whether or not to destroy all resources created after the test. (WARNING: Depending on failure, Terraform may not always be able to destroy provisioned resources.)
 `TF_LOG` | DEBUG | optional | Log level of Terraform.
 `TF_LOG_PATH` | terraform.log | optional | File where Terraform log is stored.

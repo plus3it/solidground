@@ -26,6 +26,14 @@ output "lx_sa_requests" {
   value = local.lx_sa_requests
 }
 
+output "lx_src_expanded" {
+  value = toset(local.lx_src_expanded)
+}
+
+output "lx_sa_expanded" {
+  value = toset(local.lx_sa_expanded)
+}
+
 output "lx_builder_request" {
   value = local.lx_builder_request
 }

@@ -147,10 +147,14 @@ publish-artifacts() {
   artifact_dir="$artifact_base/build-artifacts"
   mkdir -p "$artifact_dir/scap_output"
   mkdir -p "$artifact_dir/cloud/scripts"
+  mkdir -p "$artifact_dir/audit"
+  mkdir -p "$artifact_dir/messages"
   cp -R /var/log/watchmaker/ "$artifact_dir" || true
   cp -R /root/scap/output/* "$artifact_dir/scap_output/" || true
   cp -R /var/log/cloud*log "$artifact_dir/cloud/" || true
   cp -R /var/lib/cloud/instance/scripts/* "$artifact_dir/cloud/scripts/" || true
+  cp -R /var/log/audit/*log "$artifact_dir/audit/" || true
+  cp -R /var/log/messages "$artifact_dir/messages/" || true
 
   # move logs to s3
   artifact_dest="s3://$build_slug/$${instance_os}$${instance_type}"
