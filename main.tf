@@ -175,7 +175,7 @@ resource "random_string" "password" {
 }
 
 resource "aws_default_subnet" "tfi" {
-  availability_zone = var.tfi_availability_zone
+  availability_zone = var.tfi_az
 }
 
 resource "aws_security_group" "winrm_sg" {
