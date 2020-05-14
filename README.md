@@ -11,7 +11,7 @@ Variable | Default | Req/Opt (in CodeBuild) | Description
 `TF_VAR_tfi_az` | us-east-1c | optional | AZ to use for tests.
 `TF_VAR_tfi_subnet_id` | [empty] | optional | Subnet to use. CodeBuild instance must be able to access.
 `TF_VAR_tfi_instances` | [empty] | optional | Acceptable values are "win12src", "win16src", "win19src", "win12sa", "win16sa", "win19sa", "centos6src", "centos7src", "rhel6src", "rhel7src", "centos6sa", "centos7sa", "rhel6sa" and/or "rhel7sa" (comma separated list).
-`TF_VAR_tfi_instance_multiplier` | none | optional | Number of each instance type to create (Default: 1).
+`TF_VAR_tfi_instance_multiplier` | 1 | optional | Number of each instance type to create.
 `TF_VAR_tfi_rm_user` | Administrator | optional | Username to use when connecting via WinRM to Windows instances
 `TF_VAR_tfi_ssh_user` | root | optional | Username to use when connecting via SSH to Linux instances.
 `TF_VAR_tfi_instance_profile` | [empty] | optional | IAM instance profile to be used in provisioning resources.
