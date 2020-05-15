@@ -24,32 +24,51 @@ debug-2s3() {
 
   debug_file="$temp_dir/debug.log"
   echo "$msg" >> "$debug_file"
-  aws s3 cp "$debug_file" "s3://$build_slug/$${instance_os}$${instance_type}/" || true
-  aws s3 cp "${userdata_log}" "s3://$build_slug/$${instance_os}$${instance_type}/" || true
+  aws s3 cp "$debug_file" "s3://$build_slug/$${instance_os}$${instance_type}/" > /dev/null 2>&1 || true
+  aws s3 cp "${userdata_log}" "s3://$build_slug/$${instance_os}$${instance_type}/" > /dev/null 2>&1 || true
 }
 
 check-metadata-availability() {
   local metadata_loopback_az="http://169.254.169.254/latest/meta-data/placement/availability-zone"
-
   retry 50 curl -sSL $metadata_loopback_az
+}
 
-  write-tfi "Connect to EC2 metadata (AZ is $( curl $metadata_loopback_az ))" $?
+start_postfix() {
+  if [[ "$instance_os" == rhel6* ]] ; then
+    retry 10 yum install postfix
+    retry 50 service postfix start
+  fi
 }
 
 enable-yum-repo() {
   if [[ "$instance_os" == rhel6* ]] ; then
-    yum-config-manager --enable rhui-REGION-rhel-server-releases-optional
-    yum -y update
+    retry 10 yum-config-manager --enable rhui-REGION-rhel-server-releases-optional
+    retry 10 yum -y update
   fi
 }
 
 write-tfi() {
-  local msg=$1
-  local success=$2
+  local msg=""
+  local result=""
 
-  if [ "$success" = "" ]; then
-    out_result="" # needed to distinguish between null and false
-  elif [ "$success" = "0" ]; then
+  while [[ "$#" -gt 0 ]]
+  do
+    case $1 in
+      --result)
+        result="$2"
+        shift
+        ;;
+      *)
+        msg="$msg $1"
+        ;;
+    esac
+    shift
+  done
+  msg="$(echo -e "$msg" | sed -e 's/^[[:space:]]*//')"
+
+  if [ "$result" = "" ]; then
+    out_result=""
+  elif [ "$result" = "0" ]; then
     out_result=": Succeeded"
   else
     out_result=": Failed"
@@ -65,14 +84,29 @@ write-tfi() {
 retry() {
   local n=0
   local try=$1
-  local cmd="$${*: 2}"
   local result=1
+  #local cmd=""
+  local command_output="None"
   [[ $# -le 1 ]] && {
     echo "Usage $0 <number_of_retry_attempts> <Command>"
     exit $result
   }
 
-  write-tfi "Will try $try time(s) :: $cmd"
+  shift 1
+  
+  #for value in "$@"
+  #do
+  #  if [[ "$value" == *" "* ]]; then
+  #    cmd="$cmd\"$value\" "
+  #  else
+  #    cmd="$cmd$value "
+  #  fi
+  #done
+  #cmd="$(echo -e "$cmd" | sed -e 's/[[:space:]]*$//')"
+
+  if [ "$try" -gt 1 ]; then
+    write-tfi "Will try $try time(s) :: $@"
+  fi
 
   if [[ "$SHELLOPTS" == *":errexit:"* ]]; then
     set +e
@@ -81,13 +115,15 @@ retry() {
 
   until [[ $n -ge $try ]]; do
     sleep $n
-    $cmd
+    command_output=`"$@" 2>&1`
     result=$?
+    write-tfi "$@ :: code $result :: output: $command_output" --result $result
     if [[ $result -eq 0 ]]; then
       break
     else
       ((n++))
-      write-tfi "Attempt $n, command failed :: $cmd"
+      write-tfi "Attempt $n, command failed :: $@"
+      fail_snippet="Command ($@) failed :: code $result :: output: $command_output"
     fi
   done
 
@@ -107,35 +143,30 @@ open-ssh() {
     ## CentOS / RedHat
 
     # allow ssh to be on non-standard port (SEL-enforced rule)
-    setenforce 0
+    retry 1 setenforce 0
 
     # open firewall (iptables for rhel/centos 6, firewalld for 7
 
     if systemctl status firewalld &> /dev/null ; then
-      firewall-cmd --zone=public --permanent --add-port="$new_ssh_port"/tcp
-      firewall-cmd --reload
-      write-tfi "Configure firewalld" $?
+      retry 1 firewall-cmd --zone=public --permanent --add-port="$new_ssh_port"/tcp
+      retry 1 firewall-cmd --reload
     else
-      iptables -A INPUT -p tcp --dport "$new_ssh_port" -j ACCEPT #open port $new_ssh_port
-      service iptables save
-      service iptables restart
-      write-tfi "Configure iptables" $?
+      retry 1 iptables -A INPUT -p tcp --dport "$new_ssh_port" -j ACCEPT #open port $new_ssh_port
+      retry 1 service iptables save
+      retry 1 service iptables restart
     fi
 
-    sed -i -e "5iPort $new_ssh_port" /etc/ssh/sshd_config
-    sed -i -e 's/Port 22/#Port 22/g' /etc/ssh/sshd_config
-    service sshd restart
-    write-tfi "Configure sshd" $?
+    retry 1 sed -i -e "5iPort $new_ssh_port" /etc/ssh/sshd_config
+    retry 1 sed -i -e 's/Port 22/#Port 22/g' /etc/ssh/sshd_config
+    retry 1 service sshd restart
 
   else
     ## Not CentOS / RedHat (i.e., Ubuntu)
 
     # open firewall/put ssh on a new port
-    ufw allow "$new_ssh_port"/tcp
-    write-tfi "Configure ufw" $?
-    sed -i "s/Port 22/Port $new_ssh_port/g" /etc/ssh/sshd_config
-    service ssh restart
-    write-tfi "Configure ssh" $?
+    retry 1 ufw allow "$new_ssh_port"/tcp
+    retry 1 sed -i "s/Port 22/Port $new_ssh_port/g" /etc/ssh/sshd_config
+    retry 1 service ssh restart
   fi
 }
 
@@ -160,14 +191,14 @@ publish-artifacts() {
   artifact_dest="s3://$build_slug/$${instance_os}$${instance_type}"
   cp "${userdata_log}" "$artifact_dir"
   aws s3 cp "$artifact_dir" "$artifact_dest" --recursive || true
-  write-tfi "Uploaded logs to $artifact_dest" $?
+  write-tfi "Uploaded logs to $artifact_dest" --result $?
 
   # creates compressed archive to upload to s3
   zip_file="$artifact_base/$${build_slug//\//-}-$${instance_os}$${instance_type}.tgz"
   cd "$artifact_dir"
   tar -cvzf "$zip_file" .
   aws s3 cp "$zip_file" "s3://$build_slug/" || true
-  write-tfi "Uploaded artifact zip to S3" $?
+  write-tfi "Uploaded artifact zip to S3" --result $?
 }
 
 finally() {
@@ -187,15 +218,8 @@ finally() {
 catch() {
   local exit_code="$${1:-1}"
   write-tfi "$0: line $2: exiting with status $1"
-  userdata_status=("$exit_code" "Userdata install error at stage $stage")
+  userdata_status=("$exit_code" "Userdata install error: $fail_snippet")
   finally
-}
-
-install-pip() {
-  # Install pip
-  stage="Install pip" \
-    && python3 -m ensurepip --upgrade --default-pip
-  write-tfi "$stage" $?
 }
 
 install-watchmaker() {
@@ -206,44 +230,36 @@ install-watchmaker() {
 
   PYPI_URL="${pypi_url}"
 
-  install-pip
+  # Install pip
+  retry 2 python3 -m ensurepip --upgrade --default-pip
 
   # Upgrade pip and setuptools
-  stage="Upgrade pip/setuptools" \
-    && python3 -m pip install --index-url="$PYPI_URL" --upgrade pip setuptools
-  python3 -m pip --version
-  write-tfi "$stage" $?
+  retry 2 python3 -m pip install --index-url="$PYPI_URL" --upgrade pip setuptools
+  retry 1 python3 -m pip --version
 
   # Install boto3
-  stage="Install boto3" \
-    && python3 -m pip install --index-url="$PYPI_URL" --upgrade boto3
-  write-tfi "$stage" $?
+  retry 1 python3 -m pip install --index-url="$PYPI_URL" --upgrade boto3
 
   # Clone watchmaker
-  stage="Clone repository" && git clone "$GIT_REPO" --recursive
-  write-tfi "$stage" $?
+  retry 1 git clone "$GIT_REPO" --recursive
   cd watchmaker
   if [ -n "$GIT_REF" ] ; then
     # decide whether to switch to pull request or a branch
     num_re='^[0-9]+$'
     if [[ "$GIT_REF" =~ $num_re ]] ; then
-      stage="git pr (Repo: $GIT_REPO, PR: $GIT_REF)"
-      git fetch origin pull/"$GIT_REF"/head:pr-"$GIT_REF"
-      git checkout pr-"$GIT_REF"
+      retry 1 git fetch origin pull/"$GIT_REF"/head:pr-"$GIT_REF"
+      retry 1 git checkout pr-"$GIT_REF"
     else
-      stage="git ref (Repo: $GIT_REPO, Ref: $GIT_REF)"
-      git checkout "$GIT_REF"
+      retry 1 git checkout "$GIT_REF"
     fi
   fi
 
   # Update submodule refs
-  stage="Update submodules" && git submodule update --init --recursive
-  write-tfi "$stage" $?
+  retry 1 git submodule update --init --recursive
 
   # Install watchmaker
-  stage="Install Watchmaker" && python3 -m pip install --upgrade --index-url "$PYPI_URL" --editable .
-  watchmaker --version
-  write-tfi "$stage" $?
+  retry 1 python3 -m pip install --upgrade --index-url "$PYPI_URL" --editable .
+  retry 1 watchmaker --version
 }
 
 # everything below this is the TRY
@@ -271,7 +287,7 @@ handle_builder_exit() {
     artifact_dest="s3://$build_slug/$error_signal_file"
     write-tfi "Signaling error at $artifact_dest"
     aws s3 cp "$temp_dir/error.log" "$artifact_dest" || true
-    write-tfi "Upload error signal" $?
+    write-tfi "Upload error signal" --result $?
 
     catch "$@"
 
@@ -280,8 +296,7 @@ handle_builder_exit() {
   fi
 }
 
-apt-get -y update && apt-get -y install awscli
-write-tfi "apt-get update, install awscli" $?
+retry 1 apt-get -y update && apt-get -y install awscli
 
 # to resolve the issue with "sudo: unable to resolve host"
 # https://forums.aws.amazon.com/message.jspa?messageID=495274
@@ -290,24 +305,21 @@ if [[ $host_ip =~ ^[a-z]*-[0-9]{1,3}-[0-9]{1,3}-[0-9]{1,3}-[0-9]{1,3}$ ]]; then
   # hostname is ip
   ip=$${host_ip#*-}
   ip=$${ip//-/.}
-  echo "$ip $host_ip" >> /etc/hosts
+  retry 1 echo "$ip $host_ip" >> /etc/hosts
 else
-  echo "127.0.1.1 $host_ip" >> /etc/hosts
+  retry 1 echo "127.0.1.1 $host_ip" >> /etc/hosts
 fi
-write-tfi "Fix host resolution" $?
 
-echo "ARRAY <ignore> devices=/dev/sda" >> /etc/mdadm/mdadm.conf
-write-tfi "Fix no arrays warning" $?
+retry 1 echo "ARRAY <ignore> devices=/dev/sda" >> /etc/mdadm/mdadm.conf
 
-UCF_FORCE_CONFFNEW=1 \
+retry 1 UCF_FORCE_CONFFNEW=1 \
   apt-get -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confnew" \
   upgrade
-write-tfi "apt-get upgrade" $?
 
 # install prerequisites
-apt-get -y install \
+retry 1 apt-get -y install \
   python-virtualenv \
   apt-transport-https \
   ca-certificates \
@@ -317,30 +329,26 @@ apt-get -y install \
   python3-venv \
   python3-pip \
   git
-write-tfi "Install packages" $?
 
 # setup error trap to go to signal_error function
 set -e
 trap 'handle_builder_exit $? $LINENO' EXIT
 
 # start the firewall
-ufw enable
-ufw allow ssh
-write-tfi "Allow ssh" $?
+retry 1 ufw enable
+retry 1 ufw allow ssh
 
 # virtualenv
 mkdir -p "$virtualenv_path"
 cd "$virtualenv_base"
-virtualenv --python=/usr/bin/python3 "$virtualenv_path"
-write-tfi "Create virtualenv (path: $virtualenv_path" $?
+retry 1 virtualenv --python=/usr/bin/python3 "$virtualenv_path"
 source "$virtualenv_activate_script"
 
 install-watchmaker
 
 # Launch docker and build watchmaker
 export DOCKER_SLUG="${docker_slug}"
-chmod +x ci/prep_docker.sh && ci/prep_docker.sh
-write-tfi "Build standalone within docker" $?
+retry 1 chmod +x ci/prep_docker.sh && ci/prep_docker.sh
 
 # ----------  begin of wam deploy  -------------------------------------------
 
@@ -350,11 +358,10 @@ if [ -n "$GB_ENV_STAGING_DIR" ] ; then
 
   # only using "latest" so versioned copy is just wasted space
   rm -rf "$GB_ENV_STAGING_DIR"/0*
-  write-tfi "Remove versioned standalone (keeping 'latest')" $?
+  write-tfi "Remove versioned standalone (keeping 'latest')" --result $?
 
   artifact_dest="s3://$build_slug/${release_prefix}/"
-  aws s3 cp "$GB_ENV_STAGING_DIR" "$artifact_dest" --recursive
-  write-tfi "Copy standalones to $artifact_dest" $?
+  retry 1 aws s3 cp "$GB_ENV_STAGING_DIR" "$artifact_dest" --recursive
 
 fi
 
@@ -410,12 +417,10 @@ if [ "$instance_type" == "sa" ]; then
   done
 
   standalone_dest=/home/maintuser
-  aws s3 cp "$standalone_location" "$standalone_dest/watchmaker"
-  write-tfi "Download Watchmaker standalone" $?
+  retry 1 aws s3 cp "$standalone_location" "$standalone_dest/watchmaker"
   chmod +x "$standalone_dest/watchmaker"
 
-  stage="Run Watchmaker" && "$standalone_dest"/watchmaker ${common_args} ${lx_args}
-  write-tfi "$stage" $?
+  retry 1 "$standalone_dest"/watchmaker ${common_args} ${lx_args}
 
 else
   # test install from source
@@ -423,13 +428,13 @@ else
 
   # Install git
   retry 5 yum -y install git
-  write-tfi "Yum install Git" $?
 
   install-watchmaker
 
+  start_postfix
+
   # Run watchmaker
-  stage="Run Watchmaker" && watchmaker ${common_args} ${lx_args}
-  write-tfi "$stage" $?
+  retry 1 watchmaker ${common_args} ${lx_args}
 
   # ----------  end of wam install  ----------
 fi
