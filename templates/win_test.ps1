@@ -4,11 +4,11 @@ $InstanceType = "${instance_type}"
 
 Write-Host ("***************************************************************")
 switch ($InstanceType) {
-    "src" {$testType = "Watchmaker From Source"; Break}
-    "sa" {$testType = "Watchmaker Standalone"; Break}
+    "src" {$testType = "From Source"; Break}
+    "sa" {$testType = "Standalone"; Break}
     "builder" {$testType = "Standalone Builder"; Break}
 }
-Write-Host ("Running $testType Test (OS: $InstanceOS)")
+Write-Host ("Running Watchmaker $testType Test (OS: $InstanceOS)")
 Write-Host ("***************************************************************")
 Write-Host ((Get-WmiObject -class Win32_OperatingSystem).Caption)
 

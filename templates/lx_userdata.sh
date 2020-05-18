@@ -30,20 +30,20 @@ debug-2s3() {
 
 check-metadata-availability() {
   local metadata_loopback_az="http://169.254.169.254/latest/meta-data/placement/availability-zone"
-  retry 50 curl -sSL $metadata_loopback_az
+  try_cmd 50 curl -sSL $metadata_loopback_az
 }
 
 start_postfix() {
   if [[ "$instance_os" == rhel6* ]] ; then
-    retry 10 yum install postfix
-    retry 50 service postfix start
+    try_cmd 10 yum install postfix
+    try_cmd 50 service postfix start
   fi
 }
 
 enable-yum-repo() {
   if [[ "$instance_os" == rhel6* ]] ; then
-    retry 10 yum-config-manager --enable rhui-REGION-rhel-server-releases-optional
-    retry 10 yum -y update
+    try_cmd 10 yum-config-manager --enable rhui-REGION-rhel-server-releases-optional
+    try_cmd 10 yum -y update
   fi
 }
 
@@ -81,28 +81,17 @@ write-tfi() {
   fi
 }
 
-retry() {
+try_cmd() {
   local n=0
   local try=$1
   local result=1
-  #local cmd=""
   local command_output="None"
   [[ $# -le 1 ]] && {
-    echo "Usage $0 <number_of_retry_attempts> <Command>"
+    echo "Usage $0 <number_of_attempts> <Command>"
     exit $result
   }
 
   shift 1
-  
-  #for value in "$@"
-  #do
-  #  if [[ "$value" == *" "* ]]; then
-  #    cmd="$cmd\"$value\" "
-  #  else
-  #    cmd="$cmd$value "
-  #  fi
-  #done
-  #cmd="$(echo -e "$cmd" | sed -e 's/[[:space:]]*$//')"
 
   if [ "$try" -gt 1 ]; then
     write-tfi "Will try $try time(s) :: $@"
@@ -132,7 +121,7 @@ retry() {
   fi
 
   return $result
-}  # ----------  end of function retry  ----------
+}  # ----------  end of function try_cmd  ----------
 
 open-ssh() {
   # open firewall on rhel 6/7 and ubuntu, move ssh to non-standard
@@ -143,30 +132,30 @@ open-ssh() {
     ## CentOS / RedHat
 
     # allow ssh to be on non-standard port (SEL-enforced rule)
-    retry 1 setenforce 0
+    try_cmd 1 setenforce 0
 
     # open firewall (iptables for rhel/centos 6, firewalld for 7
 
     if systemctl status firewalld &> /dev/null ; then
-      retry 1 firewall-cmd --zone=public --permanent --add-port="$new_ssh_port"/tcp
-      retry 1 firewall-cmd --reload
+      try_cmd 1 firewall-cmd --zone=public --permanent --add-port="$new_ssh_port"/tcp
+      try_cmd 1 firewall-cmd --reload
     else
-      retry 1 iptables -A INPUT -p tcp --dport "$new_ssh_port" -j ACCEPT #open port $new_ssh_port
-      retry 1 service iptables save
-      retry 1 service iptables restart
+      try_cmd 1 iptables -A INPUT -p tcp --dport "$new_ssh_port" -j ACCEPT #open port $new_ssh_port
+      try_cmd 1 service iptables save
+      try_cmd 1 service iptables restart
     fi
 
-    retry 1 sed -i -e "5iPort $new_ssh_port" /etc/ssh/sshd_config
-    retry 1 sed -i -e 's/Port 22/#Port 22/g' /etc/ssh/sshd_config
-    retry 1 service sshd restart
+    try_cmd 1 sed -i -e "5iPort $new_ssh_port" /etc/ssh/sshd_config
+    try_cmd 1 sed -i -e 's/Port 22/#Port 22/g' /etc/ssh/sshd_config
+    try_cmd 1 service sshd restart
 
   else
     ## Not CentOS / RedHat (i.e., Ubuntu)
 
     # open firewall/put ssh on a new port
-    retry 1 ufw allow "$new_ssh_port"/tcp
-    retry 1 sed -i "s/Port 22/Port $new_ssh_port/g" /etc/ssh/sshd_config
-    retry 1 service ssh restart
+    try_cmd 1 ufw allow "$new_ssh_port"/tcp
+    try_cmd 1 sed -i "s/Port 22/Port $new_ssh_port/g" /etc/ssh/sshd_config
+    try_cmd 1 service ssh restart
   fi
 }
 
@@ -231,35 +220,35 @@ install-watchmaker() {
   PYPI_URL="${pypi_url}"
 
   # Install pip
-  retry 2 python3 -m ensurepip --upgrade --default-pip
+  try_cmd 2 python3 -m ensurepip --upgrade --default-pip
 
   # Upgrade pip and setuptools
-  retry 2 python3 -m pip install --index-url="$PYPI_URL" --upgrade pip setuptools
-  retry 1 python3 -m pip --version
+  try_cmd 2 python3 -m pip install --index-url="$PYPI_URL" --upgrade pip setuptools
+  try_cmd 1 python3 -m pip --version
 
   # Install boto3
-  retry 1 python3 -m pip install --index-url="$PYPI_URL" --upgrade boto3
+  try_cmd 1 python3 -m pip install --index-url="$PYPI_URL" --upgrade boto3
 
   # Clone watchmaker
-  retry 1 git clone "$GIT_REPO" --recursive
+  try_cmd 1 git clone "$GIT_REPO" --recursive
   cd watchmaker
   if [ -n "$GIT_REF" ] ; then
     # decide whether to switch to pull request or a branch
     num_re='^[0-9]+$'
     if [[ "$GIT_REF" =~ $num_re ]] ; then
-      retry 1 git fetch origin pull/"$GIT_REF"/head:pr-"$GIT_REF"
-      retry 1 git checkout pr-"$GIT_REF"
+      try_cmd 1 git fetch origin pull/"$GIT_REF"/head:pr-"$GIT_REF"
+      try_cmd 1 git checkout pr-"$GIT_REF"
     else
-      retry 1 git checkout "$GIT_REF"
+      try_cmd 1 git checkout "$GIT_REF"
     fi
   fi
 
   # Update submodule refs
-  retry 1 git submodule update --init --recursive
+  try_cmd 1 git submodule update --init --recursive
 
   # Install watchmaker
-  retry 1 python3 -m pip install --upgrade --index-url "$PYPI_URL" --editable .
-  retry 1 watchmaker --version
+  try_cmd 1 python3 -m pip install --upgrade --index-url "$PYPI_URL" --editable .
+  try_cmd 1 watchmaker --version
 }
 
 # everything below this is the TRY
@@ -296,7 +285,7 @@ handle_builder_exit() {
   fi
 }
 
-retry 1 apt-get -y update && apt-get -y install awscli
+try_cmd 1 apt-get -y update && apt-get -y install awscli
 
 # to resolve the issue with "sudo: unable to resolve host"
 # https://forums.aws.amazon.com/message.jspa?messageID=495274
@@ -305,21 +294,21 @@ if [[ $host_ip =~ ^[a-z]*-[0-9]{1,3}-[0-9]{1,3}-[0-9]{1,3}-[0-9]{1,3}$ ]]; then
   # hostname is ip
   ip=$${host_ip#*-}
   ip=$${ip//-/.}
-  retry 1 echo "$ip $host_ip" >> /etc/hosts
+  try_cmd 1 echo "$ip $host_ip" >> /etc/hosts
 else
-  retry 1 echo "127.0.1.1 $host_ip" >> /etc/hosts
+  try_cmd 1 echo "127.0.1.1 $host_ip" >> /etc/hosts
 fi
 
-retry 1 echo "ARRAY <ignore> devices=/dev/sda" >> /etc/mdadm/mdadm.conf
+try_cmd 1 echo "ARRAY <ignore> devices=/dev/sda" >> /etc/mdadm/mdadm.conf
 
-retry 1 UCF_FORCE_CONFFNEW=1 \
+try_cmd 1 UCF_FORCE_CONFFNEW=1 \
   apt-get -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confnew" \
   upgrade
 
 # install prerequisites
-retry 1 apt-get -y install \
+try_cmd 1 apt-get -y install \
   python-virtualenv \
   apt-transport-https \
   ca-certificates \
@@ -335,20 +324,20 @@ set -e
 trap 'handle_builder_exit $? $LINENO' EXIT
 
 # start the firewall
-retry 1 ufw enable
-retry 1 ufw allow ssh
+try_cmd 1 ufw enable
+try_cmd 1 ufw allow ssh
 
 # virtualenv
 mkdir -p "$virtualenv_path"
 cd "$virtualenv_base"
-retry 1 virtualenv --python=/usr/bin/python3 "$virtualenv_path"
+try_cmd 1 virtualenv --python=/usr/bin/python3 "$virtualenv_path"
 source "$virtualenv_activate_script"
 
 install-watchmaker
 
 # Launch docker and build watchmaker
 export DOCKER_SLUG="${docker_slug}"
-retry 1 chmod +x ci/prep_docker.sh && ci/prep_docker.sh
+try_cmd 1 chmod +x ci/prep_docker.sh && ci/prep_docker.sh
 
 # ----------  begin of wam deploy  -------------------------------------------
 
@@ -361,7 +350,7 @@ if [ -n "$GB_ENV_STAGING_DIR" ] ; then
   write-tfi "Remove versioned standalone (keeping 'latest')" --result $?
 
   artifact_dest="s3://$build_slug/${release_prefix}/"
-  retry 1 aws s3 cp "$GB_ENV_STAGING_DIR" "$artifact_dest" --recursive
+  try_cmd 1 aws s3 cp "$GB_ENV_STAGING_DIR" "$artifact_dest" --recursive
 
 fi
 
@@ -417,24 +406,24 @@ if [ "$instance_type" == "sa" ]; then
   done
 
   standalone_dest=/home/maintuser
-  retry 1 aws s3 cp "$standalone_location" "$standalone_dest/watchmaker"
+  try_cmd 1 aws s3 cp "$standalone_location" "$standalone_dest/watchmaker"
   chmod +x "$standalone_dest/watchmaker"
 
-  retry 1 "$standalone_dest"/watchmaker ${common_args} ${lx_args}
+  try_cmd 1 "$standalone_dest"/watchmaker ${common_args} ${lx_args}
 
 else
   # test install from source
   enable-yum-repo
 
   # Install git
-  retry 5 yum -y install git
+  try_cmd 5 yum -y install git
 
   install-watchmaker
 
   start_postfix
 
   # Run watchmaker
-  retry 1 watchmaker ${common_args} ${lx_args}
+  try_cmd 1 watchmaker ${common_args} ${lx_args}
 
   # ----------  end of wam install  ----------
 fi

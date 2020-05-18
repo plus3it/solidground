@@ -41,13 +41,13 @@ case "$instance_type" in
     test_title="Standalone Builder"
     ;;
   sa)
-    test_title="Watchmaker Standalone"
+    test_title="Standalone"
     ;;
   src)
-    test_title="Watchmaker From Source"
+    test_title="From Source"
     ;;
 esac
-echo "Running $test_title Test (OS: $instance_os)"
+echo "Running Watchmaker $test_title Test (OS: $instance_os)"
 echo "***************************************************************"
 
 # everything below this is the TRY

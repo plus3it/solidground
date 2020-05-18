@@ -26,10 +26,8 @@ locals {
   win_download_dir  = "C:\\Users\\Administrator\\Downloads"
   win_git_url       = "https://github.com/git-for-windows/git/releases/download/v2.26.2.windows.1/Git-2.26.2-64-bit.exe"
   win_python_url    = "https://www.python.org/ftp/python/3.7.7/python-3.7.7-amd64.exe"
-}
 
-# build settings
-locals {
+  # build settings
   name_prefix   = "solidground"
   date_ymd      = "${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 0, 4)}${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 5, 2)}${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 8, 2)}" #equivalent of $(date +'%Y%m%d')
   date_hm       = "${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 11, 2)}${substr(data.null_data_source.start_time.inputs.tfi_timestamp, 14, 2)}"                                                                     #equivalent of $(date +'%H%M')
@@ -37,16 +35,8 @@ locals {
   build_id      = "${substr(element(split(":", local.full_build_id), 1), 0, 8)}${substr(element(split(":", local.full_build_id), 1), 9, 4)}"                                                                                           #extract node portion of uuid (last 6 octets) for brevity
   resource_name = "${local.name_prefix}-${local.build_id}"
   build_slug    = "${var.tfi_s3_bucket}/${local.date_ymd}/${local.date_hm}-${local.build_id}"
-}
 
-data "null_data_source" "start_time" {
-  inputs = {
-    # necessary because if you just call timestamp in a local it re-evaluates it everytime that var is read
-    tfi_timestamp = timestamp()
-  }
-}
-
-locals {
+  # amis
   win_ami_find = {
     win12 = {
       search = "Windows_Server-2012-R2_RTM-English-64Bit-Base*"
@@ -110,6 +100,13 @@ locals {
   lx_any_request     = length(local.lx_all_requests) > 0 ? 1 : 0
   lx_src_expanded    = var.tfi_instance_multiplier > 1 ? [for i in setproduct(local.lx_src_requests, range(1, var.tfi_instance_multiplier + 1)) : format("%s-%02d", i[0], i[1])] : local.lx_src_requests
   lx_sa_expanded     = var.tfi_instance_multiplier > 1 ? [for i in setproduct(local.lx_sa_requests, range(1, var.tfi_instance_multiplier + 1)) : format("%s-%02d", i[0], i[1])] : local.lx_sa_requests
+}
+
+data "null_data_source" "start_time" {
+  inputs = {
+    # necessary because if you just call timestamp in a local it re-evaluates it everytime that var is read
+    tfi_timestamp = timestamp()
+  }
 }
 
 data "aws_ami" "win_amis" {
